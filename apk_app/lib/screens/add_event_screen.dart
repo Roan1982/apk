@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:provider/provider.dart';
+import 'dart:io';
 import '../providers/event_provider.dart';
 import '../models/event.dart';
 
@@ -16,6 +19,30 @@ class _AddEventScreenState extends State<AddEventScreen> {
   final _latitudeController = TextEditingController();
   final _longitudeController = TextEditingController();
   List<String> _images = [];
+
+  final ImagePicker _picker = ImagePicker();
+
+  Future<void> _pickImage() async {
+    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      // Subir a Firebase Storage
+      try {
+        String fileName = DateTime.now().millisecondsSinceEpoch.toString();
+        Reference ref = FirebaseStorage.instance.ref().child('event_images/$fileName');
+        UploadTask uploadTask = ref.putFile(File(image.path));
+        TaskSnapshot snapshot = await uploadTask;
+        String downloadUrl = await snapshot.ref.getDownloadURL();
+        setState(() {
+          _images.add(downloadUrl);
+        });
+      } catch (e) {
+        print('Error uploading image: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al subir la imagen')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,6 +79,14 @@ class _AddEventScreenState extends State<AddEventScreen> {
                 controller: _longitudeController,
                 decoration: InputDecoration(labelText: 'Longitud'),
                 keyboardType: TextInputType.number,
+              ),
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _pickImage,
+                child: Text('Seleccionar Imagen'),
+              ),
+              Wrap(
+                children: _images.map((imageUrl) => Image.network(imageUrl, width: 100, height: 100)).toList(),
               ),
               SizedBox(height: 20),
               ElevatedButton(
@@ -96,7 +131,7 @@ class _AddEventScreenState extends State<AddEventScreen> {
                     rating: 0.0,
                     ratingCount: 0,
                     date: DateTime.now(),
-                    organizerId: 'user_id', // Obtener del auth
+                    organizerId: Provider.of<AuthProvider>(context, listen: false).user!.id,
                   );
                   await Provider.of<EventProvider>(context, listen: false).addEvent(event);
                   Navigator.pop(context);

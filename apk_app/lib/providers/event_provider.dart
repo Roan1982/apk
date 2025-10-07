@@ -1,55 +1,65 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/event.dart';
 
 class EventProvider with ChangeNotifier {
-  List<Event> _events = [
-    Event(
-      id: '1',
-      name: 'Fiesta Electro Underground',
-      description: 'Una noche llena de beats electrónicos en el corazón de la ciudad.',
-      address: 'Calle Ficticia 123, Ciudad',
-      latitude: -34.6037,
-      longitude: -58.3816,
-      ticketPrice: 15.0,
-      images: ['https://via.placeholder.com/200'],
-      rating: 4.5,
-      ratingCount: 10,
-      date: DateTime.now().add(Duration(days: 7)),
-      organizerId: '1',
-    ),
-    Event(
-      id: '2',
-      name: 'Concierto Banda Indie',
-      description: 'Descubre nuevos talentos en la escena indie.',
-      address: 'Plaza Central, Ciudad',
-      latitude: -34.6037,
-      longitude: -58.3816,
-      ticketPrice: 10.0,
-      images: ['https://via.placeholder.com/200'],
-      rating: 4.0,
-      ratingCount: 5,
-      date: DateTime.now().add(Duration(days: 14)),
-      organizerId: '1',
-    ),
-  ];
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  List<Event> _events = [];
 
   List<Event> get events => _events;
 
   Future<void> fetchEvents() async {
-    // Ya tenemos datos mock
-    notifyListeners();
+    try {
+      QuerySnapshot snapshot = await _firestore.collection('events').get();
+      _events = snapshot.docs.map((doc) {
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+        data['id'] = doc.id; // Agregar el ID del documento
+        return Event.fromMap(data);
+      }).toList();
+      notifyListeners();
+    } catch (e) {
+      print('Error fetching events: $e');
+      // Mantener eventos vacíos o manejar error
+    }
   }
 
   Future<void> addEvent(Event event) async {
-    _events.add(event);
-    notifyListeners();
+    try {
+      DocumentReference docRef = await _firestore.collection('events').add(event.toMap());
+      // Actualizar el ID del evento con el ID generado por Firestore
+      Event newEvent = Event(
+        id: docRef.id,
+        name: event.name,
+        description: event.description,
+        address: event.address,
+        latitude: event.latitude,
+        longitude: event.longitude,
+        ticketPrice: event.ticketPrice,
+        images: event.images,
+        rating: event.rating,
+        ratingCount: event.ratingCount,
+        date: event.date,
+        organizerId: event.organizerId,
+      );
+      _events.add(newEvent);
+      notifyListeners();
+    } catch (e) {
+      print('Error adding event: $e');
+      throw e;
+    }
   }
 
   Future<void> updateEvent(Event event) async {
-    int index = _events.indexWhere((e) => e.id == event.id);
-    if (index != -1) {
-      _events[index] = event;
-      notifyListeners();
+    try {
+      await _firestore.collection('events').doc(event.id).update(event.toMap());
+      int index = _events.indexWhere((e) => e.id == event.id);
+      if (index != -1) {
+        _events[index] = event;
+        notifyListeners();
+      }
+    } catch (e) {
+      print('Error updating event: $e');
+      throw e;
     }
   }
 }
